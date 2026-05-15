@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#05050a">
+    <title>PIXEL QUIZ - COLOR EDITION</title>
+    <style>
+        :root { 
+            --bg: #05050a; --panel: #11111d; --accent: #00f2ff; 
+            --win: #00ff88; --text: #ffffff; 
+        }
+        body { 
+            background: var(--bg); color: var(--text); font-family: sans-serif; 
+            display: flex; flex-direction: column; align-items: center; 
+            margin: 0; user-select: none; touch-action: manipulation;
+        }
+        h1.logo {
+            font-size: clamp(30px, 8vw, 45px); margin: 20px 0 10px;
+            color: var(--accent); text-shadow: 0 0 15px var(--accent); letter-spacing: 4px;
+        }
+        #hud { 
+            display: flex; gap: 30px; background: var(--panel); 
+            padding: 10px 40px; border-radius: 15px; border: 2px solid #222; margin-bottom: 15px;
+        }
+        .stat-val { font-size: 24px; font-weight: bold; color: var(--accent); display: block; font-family: monospace; }
+        .stat-box { text-align: center; font-size: 12px; }
+
+        #settingsMenu { 
+            position: fixed; top: 10px; right: 10px; background: rgba(17,17,29,0.9); 
+            padding: 10px; border-radius: 10px; font-size: 11px; z-index: 100; border: 1px solid #333;
+        }
+
+        .main-container { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; width: 100%; }
+        .grid { 
+            display: grid; grid-template-columns: repeat(12, 1fr); gap: 1px; 
+            background: #222; border: 4px solid #1a1a2e;
+            width: clamp(280px, 45vw, 360px); aspect-ratio: 1/1;
+        }
+        .pixel { background: #FFFFFF; }
+
+        .palette { 
+            display: flex; gap: 8px; margin: 15px 0; background: var(--panel); 
+            padding: 10px; border-radius: 50px; border: 1px solid #444;
+            max-width: 90vw; overflow-x: auto;
+        }
+        .color-btn { 
+            min-width: 32px; height: 32px; border-radius: 50%; cursor: pointer; border: 2px solid #000;
+        }
+        .color-btn.active { border-color: #fff; transform: scale(1.1); box-shadow: 0 0 10px #fff; }
+
+        #statusMsg { font-size: 16px; margin-top: 10px; color: #888; font-weight: bold; height: 20px; }
+        .level-up { color: var(--win) !important; animation: blink 0.5s step-end infinite; }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        @media (max-width: 600px) { .main-container { flex-direction: column; align-items: center; } }
+    </style>
+</head>
+<body>
+
+    <div id="settingsMenu">
+        <strong>CONFIG</strong><br>
+        Vol: <input type="range" id="volRange" min="0" max="100" value="20" style="width:50px"><br>
+        <label><input type="checkbox" id="musicToggle"> Música</label><br>
+        <small>FPS: <span id="fpsDisplay">100</span></small>
+    </div>
+
+    <h1 class="logo">PIXEL QUIZ</h1>
+
+    <div id="hud">
+        <div class="stat-box"><span class="stat-val" id="levelNum">1</span>NIVEL</div>
+        <div class="stat-box"><span class="stat-val" id="timer">05:00</span>TIEMPO</div>
+    </div>
+
+    <div class="palette" id="palette"></div>
+
+    <div class="main-container">
+        <div><h4 style="text-align:center;margin:5px">MODELO</h4><div id="gridRef" class="grid"></div></div>
+        <div><h4 style="text-align:center;margin:5px">TU DIBUJO</h4><div id="gridUser" class="grid"></div></div>
+    </div>
+
+    <div id="statusMsg">¡Toca un cuadro para empezar!</div>
+
+    <script>
+        const SIZE = 12;
+        const TOTAL = SIZE * SIZE;
+        // Paleta extendida de colores para las imágenes
+        const colors = ['#FFFFFF', '#121212', '#FF3E3E', '#42FF42', '#2E93FF', '#FFF032', '#FF8C00', '#D332FF', '#8B4513', '#00FFFF', '#FF00FF'];
+        
+        let currentLevel = 1;
+        let selectedColor = colors[1];
+        let targetPattern = [];
+        let userPattern = [];
+        let isDrawing = false;
+        let timeLeft = 300;
+        let timerId = null;
+        let gameStarted = false;
+
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playTone(freq, type, dur = 0.1, gainMult = 1) {
+            const vol = (document.getElementById('volRange').value / 1000) * gainMult;
+            if (vol <= 0 || audioCtx.state === 'suspended') return;
+            const osc = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            g.gain.setValueAtTime(vol, audioCtx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+            osc.connect(g); g.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + dur);
+        }
+
+        // Música Lo-Fi de fondo
+        setInterval(() => {
+            if(document.getElementById('musicToggle').checked) {
+                const chords = [261.63, 329.63, 392.00, 440.00];
+                playTone(chords[Math.floor(Math.random()*chords.length)], 'triangle', 1.2, 0.2);
+            }
+        }, 1600);
+
+        function startTimer() {
+            if (timerId) clearInterval(timerId);
+            timerId = setInterval(() => {
+                timeLeft--;
+                const m = Math.floor(timeLeft / 60);
+                const s = timeLeft % 60;
+                document.getElementById('timer').innerText = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                if (timeLeft <= 0) {
+                    clearInterval(timerId);
+                    alert("¡TIEMPO AGOTADO!");
+                    resetLevel();
+                }
+            }, 1000);
+        }
+
+        function generateLevel() {
+            targetPattern = new Array(TOTAL).fill('#FFFFFF');
+            // La dificultad aumenta la cantidad de pixeles y colores
+            const numPixels = Math.min(10 + (currentLevel * 4), 100);
+            const numColors = Math.min(2 + Math.floor(currentLevel / 3), colors.length);
+
+            for (let i = 0; i < numPixels; i++) {
+                const r = Math.floor(Math.random() * SIZE);
+                const c = Math.floor(Math.random() * SIZE);
+                const colorIdx = Math.floor(Math.random() * (numColors - 1)) + 1;
+                const color = colors[colorIdx];
+                
+                targetPattern[r * SIZE + c] = color;
+                // Crear simetría para que parezcan "objetos" o naves espaciales
+                targetPattern[r * SIZE + (SIZE - 1 - c)] = color;
+            }
+
+            userPattern = new Array(TOTAL).fill('#FFFFFF');
+            gameStarted = false;
+            timeLeft = 300;
+            document.getElementById('timer').innerText = "05:00";
+            document.getElementById('statusMsg').innerText = "Copia la imagen...";
+            document.getElementById('statusMsg').classList.remove('level-up');
+            render();
+        }
+
+        function render() {
+            const gRef = document.getElementById('gridRef');
+            const gUser = document.getElementById('gridUser');
+            gRef.innerHTML = ''; gUser.innerHTML = '';
+            
+            for (let i = 0; i < TOTAL; i++) {
+                const pRef = document.createElement('div');
+                pRef.className = 'pixel'; pRef.style.background = targetPattern[i];
+                gRef.appendChild(pRef);
+
+                const pUser = document.createElement('div');
+                pUser.className = 'pixel'; pUser.style.background = userPattern[i];
+                
+                const handleAction = (e) => {
+                    e.preventDefault();
+                    if(!gameStarted) { gameStarted = true; startTimer(); audioCtx.resume(); }
+                    isDrawing = true; paint(i, pUser);
+                };
+
+                pUser.addEventListener('mousedown', handleAction);
+                pUser.addEventListener('touchstart', handleAction);
+                pUser.addEventListener('mouseenter', () => { if(isDrawing) paint(i, pUser); });
+                
+                gUser.appendChild(pUser);
+            }
+        }
+
+        function paint(i, el) {
+            if(userPattern[i] === selectedColor) return;
+            userPattern[i] = selectedColor;
+            el.style.background = selectedColor;
+            playTone(200 + (i % SIZE) * 30, 'sine', 0.05, 0.5);
+            checkWin();
+        }
+
+        function checkWin() {
+            const isWin = targetPattern.every((color, idx) => color.toUpperCase() === userPattern[idx].toUpperCase());
+            if (isWin && gameStarted) {
+                gameStarted = false;
+                clearInterval(timerId);
+                playTone(523, 'square', 0.3, 1.5);
+                document.getElementById('statusMsg').innerText = "¡NIVEL LOGRADO!";
+                document.getElementById('statusMsg').classList.add('level-up');
+                
+                setTimeout(() => {
+                    currentLevel++;
+                    document.getElementById('levelNum').innerText = currentLevel;
+                    generateLevel();
+                }, 1200);
+            }
+        }
+
+        function resetLevel() {
+            gameStarted = false;
+            currentLevel = 1;
+            document.getElementById('levelNum').innerText = currentLevel;
+            generateLevel();
+        }
+
+        // Generar Paleta de Colores
+        const pal = document.getElementById('palette');
+        colors.forEach(c => {
+            const b = document.createElement('div');
+            b.className = 'color-btn'; b.style.background = c;
+            if(c === colors[1]) b.classList.add('active');
+            b.onclick = () => {
+                selectedColor = c;
+                document.querySelectorAll('.color-btn').forEach(btn => btn.classList.remove('active'));
+                b.classList.add('active');
+                playTone(440, 'sine', 0.05, 0.2);
+            };
+            pal.appendChild(b);
+        });
+
+        window.addEventListener('mouseup', () => isDrawing = false);
+        window.addEventListener('touchend', () => isDrawing = false);
+        
+        let lastTime = 0;
+        function fpsLoop(t) {
+            document.getElementById('fpsDisplay').innerText = Math.round(1000/(t-lastTime)) || 100;
+            lastTime = t;
+            requestAnimationFrame(fpsLoop);
+        }
+
+        generateLevel();
+        requestAnimationFrame(fpsLoop);
+    </script>
+</body>
+</html>
