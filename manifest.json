@@ -1,0 +1,16 @@
+{
+  "short_name": "Pixel Quiz",
+  "name": "Pixel Quiz Game",
+  "start_url": "index.html",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "display": "standalone",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "logo.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ]
+}
