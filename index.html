@@ -14,7 +14,39 @@
             --bg: #05050a; --panel: #11111d; --accent: #00f2ff; 
             --win: #00ff88; --text: #ffffff; 
         }
-        body { 
+        body { #menu-principal {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    background-color: #111;
+}
+.titulo-juego {
+    color: #ff1e56;
+    font-size: 3rem;
+    text-shadow: 0 0 15px #ff1e56;
+    margin-bottom: 40px;
+}
+.contenedor-botones {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+.btn-menu {
+    background-color: #222;
+    color: #fff;
+    border: 4px solid #fff;
+    padding: 15px 40px;
+    font-size: 1.5rem;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 4px 4px 0px #555;
+}
+.btn-menu:hover {
+    background-color: #ff1e56;
+    box-shadow: 0 0 15px #ff1e56;
+}
             background: var(--bg); color: var(--text); font-family: sans-serif; 
             display: flex; flex-direction: column; align-items: center; 
             margin: 0; user-select: none; touch-action: manipulation;
@@ -252,4 +284,19 @@
         requestAnimationFrame(fpsLoop);
     </script>
 </body>
+    <div id="menu-principal">
+    <h1 class="titulo-juego">PIXEL QUIZ</h1>
+    <div class="contenedor-botones">
+        <button class="btn-menu" onclick="empezarJuego()">JUGAR</button>
+        <button class="btn-menu" onclick="abrirPersonalizacion()">PERSONALIZAR</button>
+    </div>
+</div>
+
+<div id="seccion-personalizar" style="display: none;">
+    <h2>Personalizar Juego</h2>
+    <p>Aquí podrás cambiar el tamaño del cuadro (12x12) y los dibujos.</p>
+    <button class="btn-menu" onclick="volverAlMenu()">VOLVER</button>
+</div>
+
+<div id="contenedor-juego" style="display: none;">
 </html>
